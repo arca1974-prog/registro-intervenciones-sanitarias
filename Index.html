@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Intervención Sanitaria</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <style>
+        .sidebar {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .content {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                height: auto;
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                z-index: 50;
+            }
+            .content {
+                height: calc(100vh - 200px);
+                margin-bottom: 200px;
+            }
+        }
+        .signature-pad {
+            border: 1px solid #d1d5db;
+            background: white;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        .glasgow-total {
+            background-color: #f3f4f6;
+            border: 2px solid #d1d5db;
+            font-weight: bold;
+            text-align: center;
+        }
+        .btn-hora {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+        }
+        .btn-hora:hover {
+            background-color: #2563eb;
+        }
+        .firma-preview {
+            border: 1px solid #d1d5db;
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <!-- Sidebar/Navegación -->
+        <div class="sidebar bg-blue-800 text-white w-full md:w-64 p-4">
+            <h1 class="text-xl font-bold mb-6">Registro Sanitario</h1>
+            <nav class="space-y-2" id="navegacion">
+                <!-- Las opciones de navegación se generarán con JavaScript -->
+            </nav>
+            
+            <!-- Botón Generar PDF -->
+            <div class="mt-8 pt-4 border-t border-blue-700">
+                <button onclick="generarPDF()" class="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 font-semibold">
+                    📄 Generar PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenido Principal -->
+        <div class="content flex-1 p-6" id="contenido">
+            <!-- Las secciones se generarán con JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // Función para obtener hora actual en formato HH:MM
+        function obtenerHoraActual() {
+            const ahora = new Date();
+            return ahora.getHours().toString().padStart(2, '0') + ':' + 
+                   ahora.getMinutes().toString().padStart(2, '0');
+        }
+
+        // Códigos de intervención
+        const codigosIntervencion = {
+            "1. ACCIDENTES": {
+                "1.1": "Accidente de tráfico",
+                "1.2": "Accidente deportivo",
+                "1.3": "Accidente laboral",
+                "1.4": "Accidente de tren o avión",
+                "1.5": "Atropello",
+                "1.6": "Vía Pública"
+            },
+            "2. URGENCIAS": {
+                "2.1": "Domicilio",
+                "2.2": "Agresión o violencia",
+                "2.3": "Autolisis",
+                "2.4": "Precipitado",
+                "2.5": "Quemado",
+                "2.6": "Ahogamiento",
+                "2.7": "Desaparecido"
+            },
+            "3. MÉDICAS": {
+                "3.1": "PCR",
+                "3.2": "Inconsciente",
+                "3.3": "Intoxicación",
+                "3.4": "Patología médica"
+            },
+            "4. ESPECIALES": {
+                "4.1": "Incendio",
+                "4.2": "Atentado o explosión",
+                "4.3": "MMPP o NRBQ",
+                "4.4": "Preventivo o DPR"
+            },
+            "5. ASISTENCIALES": {
+                "5.1": "Atención sociosanitaria",
+                "5.2": "Atención psicológica",
+                "5.3": "Traslado psiquiátrico"
+            }
+        };
+
+        // Datos iniciales de la intervención
+        const initialData = {
+            datosBasicos: {
+                fecha: new Date().toISOString().split('T')[0],
+                codigoIntervencion: '',
+                avisadoPor: '',
+                numAviso: '',
+                activacion: '',
+                intervencion: '',
+                transferencia: '',
+                finalizado: '',
+                anulado: '',
+                lugarIntervencion: '',
+                municipio: ''
+            },
+            paciente: {
+                nombreApellidos: '',
+                edad: '',
+                sexo: '',
+                dni: '',
+                telefono: '',
+                domicilio: '',
+                municipio: '',
+                provincia: ''
+            },
+            infoMedica: {
+                sintomatologia: '',
+                antecedentesPersonales: '',
+                alergias: '',
+                tratamientoMedico: ''
+            },
+            evaluacionInicial: {
+                valoracionInicial: {
+                    consciencia: '',
+                    frecuenciaRespiratoria: '',
+                    saturacionO2: '',
+                    frecuenciaCardiaca: '',
+                    tensionArterial: '',
+                    temperatura: '',
+                    glucemia: ''
+                },
+                valoracionSecundaria: {
+                    consciencia: '',
+                    frecuenciaRespiratoria: '',
+                    saturacionO2: '',
+                    frecuenciaCardiaca: '',
+                    tensionArterial: '',
+                    temperatura: '',
+                    glucemia: ''
+                },
+                rellenoCapilar: '',
+                respuestaOcular: 0,
+                respuestaVerbal: 0,
+                respuestaMotora: 0,
+                totalGlasgow: 0,
+                pupilaDerecha: { reactiva: false, tamano: '' },
+                pupilaIzquierda: { reactiva: false, tamano: '' },
+                palidez: false,
+                ictericia: false,
+                cianosis: false,
+                sudoracion: false,
+                vomitos: false,
+                relajacionEsfinteres: false,
+                extensionQuemadura: '',
+                gradoQuemadura: ''
+            },
+            rcp: {
+                pcrPresenciadaTestigos: false,
+                rcpTestigos: '',
+                tiempoRcpTestigos: '',
+                rcpDesa: false,
+                numDescargas: '',
+                tiempoRcpSvb: '',
+                horaInicioRcpSva: '',
+                horaPulsoEspontaneo: '',
+                resultadoRcp: ''
+            },
+            valoracionPaciente: '',
+            dotacion: {
+                vehiculo: '',
+                conductor: '',
+                tripulantes: ['', '', '']
+            },
+            denegacionAsistencia: {
+                niegaAsistencia: false,
+                rechazaTraslado: false,
+                dni: '',
+                firma: ''
+            },
+            transferencia: {
+                hospital: false,
+                preaviso: '',
+                svbSva: false,
+                indicativo: ''
+            }
+        };
+
+        // Datos de la intervención
+        let intervencion = JSON.parse(JSON.stringify(initialData));
+
+        // Variables para el control de la firma
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let canvas;
+        let ctx;
+
+        // Cargar datos guardados
+        function cargarDatos() {
+            const saved = localStorage.getItem('intervencion-sanitaria');
+            if (saved) {
+                intervencion = JSON.parse(saved);
+            }
+        }
+
+        // Guardar datos
+        function guardarDatos() {
+            localStorage.setItem('intervencion-sanitaria', JSON.stringify(intervencion));
+        }
+
+        // Limpiar todos los datos
+        function limpiarDatos() {
+            intervencion = JSON.parse(JSON.stringify(initialData));
+            localStorage.removeItem('intervencion-sanitaria');
+            actualizarVista();
+        }
+
+        // Cambiar sección
+        let seccionActual = 'datosBasicos';
+        
+        function cambiarSeccion(seccion) {
+            seccionActual = seccion;
+            actualizarVista();
+        }
+
+        // Actualizar campo
+        function actualizarCampo(seccion, campo, valor, subseccion = null) {
+            if (subseccion) {
+                intervencion[seccion][subseccion][campo] = valor;
+            } else {
+                intervencion[seccion][campo] = valor;
+            }
+            guardarDatos();
+            actualizarVista();
+        }
+
+        // Actualizar campo de array
+        function actualizarCampoArray(seccion, campo, index, valor) {
+            intervencion[seccion][campo][index] = valor;
+            guardarDatos();
+            actualizarVista();
+        }
+
+        // Función para establecer hora actual
+        function establecerHora(seccion, campo) {
+            actualizarCampo(seccion, campo, obtenerHoraActual());
+        }
+
+        // Calcular Glasgow
+        function calcularGlasgow() {
+            const ocular = intervencion.evaluacionInicial.respuestaOcular || 0;
+            const verbal = intervencion.evaluacionInicial.respuestaVerbal || 0;
+            const motora = intervencion.evaluacionInicial.respuestaMotora || 0;
+            intervencion.evaluacionInicial.totalGlasgow = ocular + verbal + motora;
+            guardarDatos();
+            actualizarVista();
+        }
+
+        // Funciones para el manejo de la firma
+        function inicializarFirma() {
+            canvas = document.getElementById('firmaCanvas');
+            if (!canvas) return;
+            
+            ctx = canvas.getContext('2d');
+            
+            // Configurar el canvas con tamaño fijo para mejor calidad
+            canvas.width = 600;
+            canvas.height = 200;
+            
+            // Configurar estilo del pincel
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Limpiar canvas
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Cargar firma existente si existe
+            if (intervencion.denegacionAsistencia.firma) {
+                const img = new Image();
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = intervencion.denegacionAsistencia.firma;
+            }
+        }
+
+        function comenzarDibujo(e) {
+            e.preventDefault();
+            isDrawing = true;
+            
+            const pos = obtenerPosicion(e);
+            [lastX, lastY] = [pos.x, pos.y];
+        }
+
+        function dibujar(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+            
+            const pos = obtenerPosicion(e);
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            
+            [lastX, lastY] = [pos.x, pos.y];
+        }
+
+        function terminarDibujo() {
+            isDrawing = false;
+            guardarFirma(); // Guardar automáticamente al terminar de dibujar
+        }
+
+        function obtenerPosicion(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            
+            if (e.type.includes('touch')) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            
+            // Escalar las coordenadas al tamaño real del canvas
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function limpiarFirma() {
+            if (!ctx) return;
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            intervencion.denegacionAsistencia.firma = '';
+            guardarDatos();
+            actualizarVista();
+        }
+
+        function guardarFirma() {
+            if (!canvas) return;
+            
+            // Guardar la firma en alta calidad
+            intervencion.denegacionAsistencia.firma = canvas.toDataURL('image/png', 1.0);
+            guardarDatos();
+            actualizarVista();
+        }
+
+        // Generar PDF con formato mejorado
+        function generarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Configuración
+            let y = 20;
+            const margin = 20;
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            
+            // Colores corporativos
+            const primaryColor = [59, 130, 246]; // Azul
+            const secondaryColor = [16, 185, 129]; // Verde
+            const accentColor = [239, 68, 68]; // Rojo
+            const grayColor = [107, 114, 128]; // Gris
+            
+            // Función para dibujar línea separadora
+            function dibujarLineaSeparadora() {
+                doc.setDrawColor(...grayColor);
+                doc.setLineWidth(0.5);
+                doc.line(margin, y, pageWidth - margin, y);
+                y += 5;
+            }
+            
+            // Función para agregar sección con estilo
+            function agregarSeccion(titulo, color = primaryColor) {
+                if (y > pageHeight - 40) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                doc.setFillColor(...color);
+                doc.rect(margin, y, pageWidth - (2 * margin), 8, 'F');
+                
+                doc.setTextColor(255, 255, 255);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(12);
+                doc.text(titulo, margin + 5, y + 5.5);
+                
+                doc.setTextColor(0, 0, 0);
+                y += 15;
+            }
+            
+            // Función para agregar campo con formato
+            function agregarCampo(etiqueta, valor, nivel = 0) {
+                if (y > pageHeight - 15) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                const indent = margin + (nivel * 10);
+                const maxWidth = pageWidth - (2 * margin) - (nivel * 10);
+                
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(9);
+                const etiquetaLines = doc.splitTextToSize(etiqueta + ":", maxWidth - 30);
+                doc.text(etiquetaLines, indent, y);
+                
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                if (valor === null || valor === undefined) valor = '';
+                if (typeof valor === 'boolean') valor = valor ? 'Sí' : 'No';
+                
+                const valorLines = doc.splitTextToSize(String(valor), maxWidth - 30);
+                const valorX = indent + 25;
+                
+                // Ajustar posición Y si la etiqueta tiene múltiples líneas
+                const valorY = y + (etiquetaLines.length > 1 ? (etiquetaLines.length - 1) * 4 : 0);
+                doc.text(valorLines, valorX, valorY);
+                
+                y += Math.max(etiquetaLines.length, valorLines.length) * 4 + 2;
+            }
+            
+            // Función para agregar subsección
+            function agregarSubseccion(titulo) {
+                if (y > pageHeight - 20) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(...secondaryColor);
+                doc.text(titulo, margin + 5, y);
+                doc.setTextColor(0, 0, 0);
+                y += 7;
+            }
+
+            // CABECERA DEL DOCUMENTO
+            doc.setFillColor(...primaryColor);
+            doc.rect(0, 0, pageWidth, 40, 'F');
+            
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.text('REGISTRO DE INTERVENCIÓN SANITARIA', pageWidth / 2, 15, { align: 'center' });
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Generado el: ${new Date().toLocaleString('es-ES')}`, pageWidth / 2, 25, { align: 'center' });
+            
+            // Información de la intervención en la cabecera
+            const codigo = intervencion.datosBasicos.codigoIntervencion || 'Sin código';
+            const fecha = intervencion.datosBasicos.fecha || 'Sin fecha';
+            doc.text(`Código: ${codigo} | Fecha: ${fecha}`, pageWidth / 2, 35, { align: 'center' });
+            
+            y = 50;
+
+            // 1. DATOS BÁSICOS
+            agregarSeccion('1. DATOS BÁSICOS DE LA INTERVENCIÓN');
+            Object.entries(intervencion.datosBasicos).forEach(([key, value]) => {
+                if (key !== 'fecha' && key !== 'codigoIntervencion') {
+                    const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                    agregarCampo(etiqueta, value);
+                }
+            });
+            dibujarLineaSeparadora();
+
+            // 2. DATOS DEL PACIENTE
+            agregarSeccion('2. DATOS DEL PACIENTE');
+            Object.entries(intervencion.paciente).forEach(([key, value]) => {
+                const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                agregarCampo(etiqueta, value);
+            });
+            dibujarLineaSeparadora();
+
+            // 3. INFORMACIÓN MÉDICA
+            agregarSeccion('3. INFORMACIÓN MÉDICA');
+            Object.entries(intervencion.infoMedica).forEach(([key, value]) => {
+                const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                agregarCampo(etiqueta, value);
+            });
+            dibujarLineaSeparadora();
+
+            // 4. EVALUACIÓN INICIAL
+            agregarSeccion('4. EVALUACIÓN INICIAL');
+            
+            // Valoración Inicial
+            agregarSubseccion('Valoración Inicial');
+            Object.entries(intervencion.evaluacionInicial.valoracionInicial).forEach(([key, value]) => {
+                const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                agregarCampo(etiqueta, value, 1);
+            });
+            
+            // Valoración Secundaria
+            agregarSubseccion('Valoración Secundaria');
+            Object.entries(intervencion.evaluacionInicial.valoracionSecundaria).forEach(([key, value]) => {
+                const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                agregarCampo(etiqueta, value, 1);
+            });
+            
+            // Escala de Glasgow
+            agregarSubseccion('Escala de Glasgow');
+            agregarCampo('Respuesta Ocular', intervencion.evaluacionInicial.respuestaOcular, 1);
+            agregarCampo('Respuesta Verbal', intervencion.evaluacionInicial.respuestaVerbal, 1);
+            agregarCampo('Respuesta Motora', intervencion.evaluacionInicial.respuestaMotora, 1);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setFillColor(...secondaryColor);
+            doc.rect(margin + 10, y, 40, 6, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(`TOTAL: ${intervencion.evaluacionInicial.totalGlasgow}`, margin + 15, y + 4);
+            doc.setTextColor(0, 0, 0);
+            y += 10;
+            
+            // Otros campos de evaluación
+            agregarCampo('Relleno Capilar', intervencion.evaluacionInicial.rellenoCapilar);
+            
+            // Pupilas
+            agregarSubseccion('Examen Pupilar');
+            agregarCampo('Pupila Derecha - Reactiva', intervencion.evaluacionInicial.pupilaDerecha.reactiva ? 'Sí' : 'No', 1);
+            agregarCampo('Pupila Derecha - Tamaño', intervencion.evaluacionInicial.pupilaDerecha.tamano, 1);
+            agregarCampo('Pupila Izquierda - Reactiva', intervencion.evaluacionInicial.pupilaIzquierda.reactiva ? 'Sí' : 'No', 1);
+            agregarCampo('Pupila Izquierda - Tamaño', intervencion.evaluacionInicial.pupilaIzquierda.tamano, 1);
+            
+            // Síntomas
+            agregarSubseccion('Síntomas Observados');
+            const sintomas = [];
+            if (intervencion.evaluacionInicial.palidez) sintomas.push('Palidez');
+            if (intervencion.evaluacionInicial.ictericia) sintomas.push('Ictericia');
+            if (intervencion.evaluacionInicial.cianosis) sintomas.push('Cianosis');
+            if (intervencion.evaluacionInicial.sudoracion) sintomas.push('Sudoración');
+            if (intervencion.evaluacionInicial.vomitos) sintomas.push('Vómitos');
+            if (intervencion.evaluacionInicial.relajacionEsfinteres) sintomas.push('Relajación Esfínteres');
+            
+            if (sintomas.length > 0) {
+                agregarCampo('Síntomas presentes', sintomas.join(', '), 1);
+            } else {
+                agregarCampo('Síntomas presentes', 'Ninguno', 1);
+            }
+            
+            // Quemaduras
+            if (intervencion.evaluacionInicial.extensionQuemadura || intervencion.evaluacionInicial.gradoQuemadura) {
+                agregarSubseccion('Quemaduras');
+                agregarCampo('Extensión', intervencion.evaluacionInicial.extensionQuemadura + '%', 1);
+                agregarCampo('Grado', intervencion.evaluacionInicial.gradoQuemadura, 1);
+            }
+            
+            dibujarLineaSeparadora();
+
+            // 5. REANIMACIÓN CARDIOPULMONAR
+            agregarSeccion('5. REANIMACIÓN CARDIOPULMONAR (RCP)');
+            Object.entries(intervencion.rcp).forEach(([key, value]) => {
+                const etiqueta = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                agregarCampo(etiqueta, value);
+            });
+            dibujarLineaSeparadora();
+
+            // 6. VALORACIÓN DEL PACIENTE
+            agregarSeccion('6. VALORACIÓN Y ATENCIÓN PRESTADA');
+            if (intervencion.valoracionPaciente) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                const lines = doc.splitTextToSize(intervencion.valoracionPaciente, pageWidth - (2 * margin));
+                doc.text(lines, margin + 5, y);
+                y += lines.length * 4 + 5;
+            } else {
+                agregarCampo('Descripción', 'No se registró valoración específica');
+            }
+            dibujarLineaSeparadora();
+
+            // 7. DOTACIÓN
+            agregarSeccion('7. DOTACIÓN Y PERSONAL');
+            agregarCampo('Vehículo', intervencion.dotacion.vehiculo);
+            agregarCampo('Conductor', intervencion.dotacion.conductor);
+            
+            intervencion.dotacion.tripulantes.forEach((tripulante, index) => {
+                if (tripulante) {
+                    agregarCampo(`Tripulante ${index + 1}`, tripulante);
+                }
+            });
+            dibujarLineaSeparadora();
+
+            // 8. DENEGACIÓN DE ASISTENCIA
+            agregarSeccion('8. DENEGACIÓN DE ASISTENCIA O TRASLADO', accentColor);
+            agregarCampo('Niega asistencia', intervencion.denegacionAsistencia.niegaAsistencia);
+            agregarCampo('Rechaza traslado', intervencion.denegacionAsistencia.rechazaTraslado);
+            agregarCampo('DNI', intervencion.denegacionAsistencia.dni);
+            
+            // Firma
+            if (intervencion.denegacionAsistencia.firma) {
+                agregarSubseccion('Firma del paciente/testigo');
+                
+                if (y > pageHeight - 60) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                try {
+                    // Agregar la imagen de la firma con marco
+                    doc.setDrawColor(...grayColor);
+                    doc.setLineWidth(0.5);
+                    doc.rect(margin + 10, y, 120, 50);
+                    
+                    const firmaData = intervencion.denegacionAsistencia.firma;
+                    doc.addImage(firmaData, 'PNG', margin + 15, y + 5, 110, 40);
+                    y += 60;
+                } catch (error) {
+                    agregarCampo('Firma', 'Error al cargar la firma');
+                }
+            } else {
+                agregarCampo('Firma', 'No se registró firma');
+            }
+            dibujarLineaSeparadora();
+
+            // 9. TRANSFERENCIA
+            agregarSeccion('9. TRANSFERENCIA Y FINALIZACIÓN');
+            agregarCampo('Hospital', intervencion.transferencia.hospital);
+            agregarCampo('Preaviso', intervencion.transferencia.preaviso);
+            agregarCampo('SVB/SVA', intervencion.transferencia.svbSva);
+            agregarCampo('Indicativo', intervencion.transferencia.indicativo);
+
+            // PIE DE PÁGINA
+            const totalPages = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPages; i++) {
+                doc.setPage(i);
+                
+                // Línea inferior
+                doc.setDrawColor(...grayColor);
+                doc.setLineWidth(0.5);
+                doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+                
+                // Texto del pie de página
+                doc.setFontSize(8);
+                doc.setTextColor(...grayColor);
+                doc.text(`Página ${i} de ${totalPages}`, pageWidth / 2, pageHeight - 10, { align: 'center' });
+                doc.text('Documento generado automáticamente - Registro Sanitario', pageWidth / 2, pageHeight - 5, { align: 'center' });
+            }
+
+            // Guardar PDF
+            const nombreArchivo = `Intervencion_${intervencion.datosBasicos.codigoIntervencion || 'sin_codigo'}_${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(nombreArchivo);
+            
+            // Limpiar datos después de generar el PDF
+            setTimeout(() => {
+                limpiarDatos();
+                alert('PDF generado correctamente. Todos los campos han sido limpiados.');
+            }, 500);
+        }
+
+        // Definir secciones
+        const secciones = [
+            { id: 'datosBasicos', nombre: '1. Datos Básicos' },
+            { id: 'paciente', nombre: '2. Datos Paciente' },
+            { id: 'infoMedica', nombre: '3. Info Médica' },
+            { id: 'evaluacionInicial', nombre: '4. Evaluación Inicial' },
+            { id: 'rcp', nombre: '5. RCP' },
+            { id: 'valoracionPaciente', nombre: '6. Valoración' },
+            { id: 'dotacion', nombre: '7. Dotación' },
+            { id: 'denegacionAsistencia', nombre: '8. Denegación' },
+            { id: 'transferencia', nombre: '9. Transferencia' }
+        ];
+
+        // Actualizar vista completa
+        function actualizarVista() {
+            // Actualizar navegación
+            const navegacion = document.getElementById('navegacion');
+            navegacion.innerHTML = secciones.map(seccion => `
+                <button onclick="cambiarSeccion('${seccion.id}')" 
+                    class="w-full text-left px-3 py-2 rounded transition-colors ${seccionActual === seccion.id ? 'bg-blue-600' : 'hover:bg-blue-700'}">
+                    ${seccion.nombre}
+                </button>
+            `).join('');
+
+            // Actualizar contenido
+            const contenido = document.getElementById('contenido');
+            contenido.innerHTML = generarSeccion(seccionActual);
+            
+            // Inicializar firma si estamos en la sección correspondiente
+            if (seccionActual === 'denegacionAsistencia') {
+                setTimeout(inicializarFirma, 100);
+            }
+        }
+
+        // Generar sección específica
+        function generarSeccion(seccionId) {
+            switch(seccionId) {
+                case 'datosBasicos':
+                    return generarDatosBasicos();
+                case 'paciente':
+                    return generarDatosPaciente();
+                case 'infoMedica':
+                    return generarInfoMedica();
+                case 'evaluacionInicial':
+                    return generarEvaluacionInicial();
+                case 'rcp':
+                    return generarRCP();
+                case 'valoracionPaciente':
+                    return generarValoracionPaciente();
+                case 'dotacion':
+                    return generarDotacion();
+                case 'denegacionAsistencia':
+                    return generarDenegacionAsistencia();
+                case 'transferencia':
+                    return generarTransferencia();
+                default:
+                    return `<h2 class="text-2xl font-bold text-gray-800">Sección no encontrada</h2>`;
+            }
+        }
+
+        // 1. Datos Básicos
+        function generarDatosBasicos() {
+            const d = intervencion.datosBasicos;
+            const camposHora = ['activacion', 'intervencion', 'transferencia', 'finalizado', 'anulado'];
+            
+            // Generar opciones del select
+            let opcionesSelect = '<option value="">Seleccionar código de intervención</option>';
+            
+            Object.entries(codigosIntervencion).forEach(([categoria, subcodigos]) => {
+                opcionesSelect += `<optgroup label="${categoria}">`;
+                Object.entries(subcodigos).forEach(([codigo, descripcion]) => {
+                    const selected = d.codigoIntervencion === codigo ? 'selected' : '';
+                    opcionesSelect += `<option value="${codigo}" ${selected}>${codigo} - ${descripcion}</option>`;
+                });
+                opcionesSelect += '</optgroup>';
+            });
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">1. Datos Básicos</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Fecha</label>
+                            <input
+                                type="date"
+                                value="${d.fecha}"
+                                onchange="actualizarCampo('datosBasicos', 'fecha', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Código Intervención</label>
+                            <select
+                                onchange="actualizarCampo('datosBasicos', 'codigoIntervencion', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                ${opcionesSelect}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Avisado por</label>
+                            <input
+                                type="text"
+                                value="${d.avisadoPor}"
+                                onchange="actualizarCampo('datosBasicos', 'avisadoPor', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nº Aviso</label>
+                            <input
+                                type="text"
+                                value="${d.numAviso}"
+                                onchange="actualizarCampo('datosBasicos', 'numAviso', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        
+                        ${camposHora.map(campo => `
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">${campo.charAt(0).toUpperCase() + campo.slice(1)}</label>
+                                <div class="flex space-x-2 mt-1">
+                                    <input
+                                        type="text"
+                                        value="${d[campo]}"
+                                        placeholder="HH:MM"
+                                        onchange="actualizarCampo('datosBasicos', '${campo}', this.value)"
+                                        class="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onclick="establecerHora('datosBasicos', '${campo}')"
+                                        class="btn-hora whitespace-nowrap"
+                                    >
+                                        Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Lugar de Intervención</label>
+                            <input
+                                type="text"
+                                value="${d.lugarIntervencion}"
+                                onchange="actualizarCampo('datosBasicos', 'lugarIntervencion', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Municipio</label>
+                            <input
+                                type="text"
+                                value="${d.municipio}"
+                                onchange="actualizarCampo('datosBasicos', 'municipio', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. Datos del Paciente
+        function generarDatosPaciente() {
+            const d = intervencion.paciente;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">2. Datos del Paciente</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nombre y Apellidos</label>
+                            <input
+                                type="text"
+                                value="${d.nombreApellidos}"
+                                onchange="actualizarCampo('paciente', 'nombreApellidos', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Edad</label>
+                            <input
+                                type="text"
+                                value="${d.edad}"
+                                onchange="actualizarCampo('paciente', 'edad', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Sexo</label>
+                            <select
+                                value="${d.sexo}"
+                                onchange="actualizarCampo('paciente', 'sexo', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="">Seleccionar</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">DNI</label>
+                            <input
+                                type="text"
+                                value="${d.dni}"
+                                onchange="actualizarCampo('paciente', 'dni', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Teléfono</label>
+                            <input
+                                type="text"
+                                value="${d.telefono}"
+                                onchange="actualizarCampo('paciente', 'telefono', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Domicilio</label>
+                            <input
+                                type="text"
+                                value="${d.domicilio}"
+                                onchange="actualizarCampo('paciente', 'domicilio', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Municipio</label>
+                            <input
+                                type="text"
+                                value="${d.municipio}"
+                                onchange="actualizarCampo('paciente', 'municipio', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Provincia</label>
+                            <input
+                                type="text"
+                                value="${d.provincia}"
+                                onchange="actualizarCampo('paciente', 'provincia', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 3. Información Médica
+        function generarInfoMedica() {
+            const d = intervencion.infoMedica;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">3. Información Médica del Paciente</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Sintomatología</label>
+                            <textarea
+                                onchange="actualizarCampo('infoMedica', 'sintomatologia', this.value)"
+                                rows="3"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >${d.sintomatologia}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Antecedentes Personales</label>
+                            <textarea
+                                onchange="actualizarCampo('infoMedica', 'antecedentesPersonales', this.value)"
+                                rows="3"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >${d.antecedentesPersonales}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Alergias</label>
+                            <textarea
+                                onchange="actualizarCampo('infoMedica', 'alergias', this.value)"
+                                rows="2"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >${d.alergias}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tratamiento Médico</label>
+                            <textarea
+                                onchange="actualizarCampo('infoMedica', 'tratamientoMedico', this.value)"
+                                rows="3"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >${d.tratamientoMedico}</textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. Evaluación Inicial
+        function generarEvaluacionInicial() {
+            const d = intervencion.evaluacionInicial;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">4. Evaluación Inicial del Paciente</h2>
+                    
+                    <!-- Valoración Inicial y Secundaria -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <!-- Valoración Inicial -->
+                        <div class="border rounded-lg p-4 bg-white">
+                            <h3 class="text-lg font-semibold mb-4 text-blue-600">Valoración Inicial</h3>
+                            ${generarCamposValoracion('valoracionInicial', d.valoracionInicial)}
+                        </div>
+
+                        <!-- Valoración Secundaria -->
+                        <div class="border rounded-lg p-4 bg-white">
+                            <h3 class="text-lg font-semibold mb-4 text-green-600">Valoración Secundaria</h3>
+                            ${generarCamposValoracion('valoracionSecundaria', d.valoracionSecundaria)}
+                        </div>
+                    </div>
+
+                    <!-- Escala de Glasgow -->
+                    <div class="border rounded-lg p-4 bg-white mb-6">
+                        <h3 class="text-lg font-semibold mb-4">Escala de Glasgow</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Respuesta Ocular (1-4)</label>
+                                <select
+                                    value="${d.respuestaOcular}"
+                                    onchange="actualizarCampo('evaluacionInicial', 'respuestaOcular', parseInt(this.value)); calcularGlasgow()"
+                                    class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                                >
+                                    <option value="0">Seleccionar</option>
+                                    ${[1,2,3,4].map(n => `<option value="${n}">${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Respuesta Verbal (1-5)</label>
+                                <select
+                                    value="${d.respuestaVerbal}"
+                                    onchange="actualizarCampo('evaluacionInicial', 'respuestaVerbal', parseInt(this.value)); calcularGlasgow()"
+                                    class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                                >
+                                    <option value="0">Seleccionar</option>
+                                    ${[1,2,3,4,5].map(n => `<option value="${n}">${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Respuesta Motora (1-6)</label>
+                                <select
+                                    value="${d.respuestaMotora}"
+                                    onchange="actualizarCampo('evaluacionInicial', 'respuestaMotora', parseInt(this.value)); calcularGlasgow()"
+                                    class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                                >
+                                    <option value="0">Seleccionar</option>
+                                    ${[1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Total Glasgow</label>
+                                <input
+                                    type="text"
+                                    value="${d.totalGlasgow}"
+                                    readonly
+                                    class="glasgow-total mt-1 block w-full rounded-md px-3 py-2"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resto de campos -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${generarCamposAdicionales()}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 5. RCP
+        function generarRCP() {
+            const d = intervencion.rcp;
+            const camposHoraRCP = ['horaInicioRcpSva', 'horaPulsoEspontaneo'];
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">5. Reanimación Cardiopulmonar</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex items-center">
+                            <input
+                                type="checkbox"
+                                ${d.pcrPresenciadaTestigos ? 'checked' : ''}
+                                onchange="actualizarCampo('rcp', 'pcrPresenciadaTestigos', this.checked)"
+                                class="mr-2"
+                            />
+                            <label class="text-sm font-medium text-gray-700">PCR presenciada testigos</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">RCP testigos</label>
+                            <select
+                                value="${d.rcpTestigos}"
+                                onchange="actualizarCampo('rcp', 'rcpTestigos', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            >
+                                <option value="">Seleccionar</option>
+                                <option value="lego">Lego</option>
+                                <option value="entrenado">Entrenado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tiempo RCP testigos (minutos)</label>
+                            <input
+                                type="text"
+                                value="${d.tiempoRcpTestigos}"
+                                onchange="actualizarCampo('rcp', 'tiempoRcpTestigos', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        <div class="flex items-center">
+                            <input
+                                type="checkbox"
+                                ${d.rcpDesa ? 'checked' : ''}
+                                onchange="actualizarCampo('rcp', 'rcpDesa', this.checked)"
+                                class="mr-2"
+                            />
+                            <label class="text-sm font-medium text-gray-700">RCP DESA</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Nº de descargas</label>
+                            <input
+                                type="text"
+                                value="${d.numDescargas}"
+                                onchange="actualizarCampo('rcp', 'numDescargas', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Tiempo RCP SVB (minutos)</label>
+                            <input
+                                type="text"
+                                value="${d.tiempoRcpSvb}"
+                                onchange="actualizarCampo('rcp', 'tiempoRcpSvb', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        
+                        ${camposHoraRCP.map(campo => `
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">${campo.replace(/([A-Z])/g, ' $1')}</label>
+                                <div class="flex space-x-2 mt-1">
+                                    <input
+                                        type="text"
+                                        value="${d[campo]}"
+                                        placeholder="HH:MM"
+                                        onchange="actualizarCampo('rcp', '${campo}', this.value)"
+                                        class="flex-1 border border-gray-300 rounded-md px-3 py-2"
+                                    />
+                                    <button
+                                        type="button"
+                                        onclick="establecerHora('rcp', '${campo}')"
+                                        class="btn-hora whitespace-nowrap"
+                                    >
+                                        Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Resultado RCP</label>
+                            <input
+                                type="text"
+                                value="${d.resultadoRcp}"
+                                onchange="actualizarCampo('rcp', 'resultadoRcp', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 6. Valoración del Paciente
+        function generarValoracionPaciente() {
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">6. Valoración del Paciente</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Descripción de la intervención</label>
+                            <textarea
+                                onchange="intervencion.valoracionPaciente = this.value; guardarDatos();"
+                                rows="10"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Escriba aquí todo lo que se ha realizado en la intervención..."
+                            >${intervencion.valoracionPaciente}</textarea>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 7. Dotación
+        function generarDotacion() {
+            const d = intervencion.dotacion;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">7. Dotación</h2>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Vehículo</label>
+                            <input
+                                type="text"
+                                value="${d.vehiculo}"
+                                onchange="actualizarCampo('dotacion', 'vehiculo', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Conductor</label>
+                            <input
+                                type="text"
+                                value="${d.conductor}"
+                                onchange="actualizarCampo('dotacion', 'conductor', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        ${[0,1,2].map(index => `
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">TES/TTS/Vol ${index + 1}</label>
+                                <input
+                                    type="text"
+                                    value="${d.tripulantes[index]}"
+                                    onchange="actualizarCampoArray('dotacion', 'tripulantes', ${index}, this.value)"
+                                    class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                                />
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 8. Denegación de Asistencia (CON FIRMA IMPLEMENTADA)
+        function generarDenegacionAsistencia() {
+            const d = intervencion.denegacionAsistencia;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">8. Denegación de Asistencia o Traslado</h2>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                        <p class="text-sm text-yellow-800 mb-4">
+                            "El abajo firmante declara en nombre propio como receptor de la asistencia o en calidad de testigo, 
+                            cualquiera de estas situaciones ofrecidas por esta institución al paciente:"
+                        </p>
+                        
+                        <div class="space-y-3">
+                            <label class="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    ${d.niegaAsistencia ? 'checked' : ''}
+                                    onchange="actualizarCampo('denegacionAsistencia', 'niegaAsistencia', this.checked)"
+                                    class="mr-2"
+                                />
+                                <span class="text-sm">Niega la asistencia sanitaria.</span>
+                            </label>
+                            
+                            <label class="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    ${d.rechazaTraslado ? 'checked' : ''}
+                                    onchange="actualizarCampo('denegacionAsistencia', 'rechazaTraslado', this.checked)"
+                                    class="mr-2"
+                                />
+                                <span class="text-sm">Rechaza ser trasladado a un centro sanitario, habiendo sido asistido e informado que en caso de empeoramiento llame al teléfono 112.</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">DNI</label>
+                            <input
+                                type="text"
+                                value="${d.dni}"
+                                onchange="actualizarCampo('denegacionAsistencia', 'dni', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-4">Firma del paciente o testigo</label>
+                        
+                        <div class="bg-white border border-gray-300 rounded-lg p-4">
+                            <div class="mb-4">
+                                <p class="text-sm text-gray-600 mb-2">Firme en el recuadro usando el ratón (ordenador) o el dedo (móvil):</p>
+                                <canvas 
+                                    id="firmaCanvas"
+                                    class="signature-pad w-full h-48 border-2 border-dashed border-gray-300 rounded"
+                                    onmousedown="comenzarDibujo(event)"
+                                    onmousemove="dibujar(event)"
+                                    onmouseup="terminarDibujo()"
+                                    onmouseleave="terminarDibujo()"
+                                    ontouchstart="comenzarDibujo(event)"
+                                    ontouchmove="dibujar(event)"
+                                    ontouchend="terminarDibujo()"
+                                ></canvas>
+                            </div>
+                            
+                            <div class="flex space-x-4">
+                                <button
+                                    type="button"
+                                    onclick="limpiarFirma()"
+                                    class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                                >
+                                    Limpiar Firma
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="guardarFirma()"
+                                    class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                                >
+                                    Guardar Firma
+                                </button>
+                            </div>
+                            
+                            ${d.firma ? `
+                                <div class="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                                    <p class="text-sm text-green-700">✅ Firma guardada correctamente</p>
+                                    <img src="${d.firma}" alt="Firma guardada" class="firma-preview mt-2 mx-auto" />
+                                </div>
+                            ` : `
+                                <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                                    <p class="text-sm text-yellow-700">⚠️ No se ha guardado ninguna firma</p>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 9. Transferencia a
+        function generarTransferencia() {
+            const d = intervencion.transferencia;
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">9. Transferencia a</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex items-center">
+                            <input
+                                type="checkbox"
+                                ${d.hospital ? 'checked' : ''}
+                                onchange="actualizarCampo('transferencia', 'hospital', this.checked)"
+                                class="mr-2"
+                            />
+                            <label class="text-sm font-medium text-gray-700">Hospital</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Preaviso</label>
+                            <input
+                                type="text"
+                                value="${d.preaviso}"
+                                placeholder="HH:MM"
+                                onchange="actualizarCampo('transferencia', 'preaviso', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                        <div class="flex items-center">
+                            <input
+                                type="checkbox"
+                                ${d.svbSva ? 'checked' : ''}
+                                onchange="actualizarCampo('transferencia', 'svbSva', this.checked)"
+                                class="mr-2"
+                            />
+                            <label class="text-sm font-medium text-gray-700">SVB/SVA</label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Indicativo</label>
+                            <input
+                                type="text"
+                                value="${d.indicativo}"
+                                onchange="actualizarCampo('transferencia', 'indicativo', this.value)"
+                                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                            />
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Funciones auxiliares para evaluación inicial
+        function generarCamposValoracion(tipo, datos) {
+            const campos = [
+                { key: 'consciencia', label: 'Consciencia', tipo: 'select', opciones: ['A', 'V', 'D', 'N'] },
+                { key: 'frecuenciaRespiratoria', label: 'Frecuencia Respiratoria' },
+                { key: 'saturacionO2', label: 'Saturación O2' },
+                { key: 'frecuenciaCardiaca', label: 'Frecuencia Cardiaca' },
+                { key: 'tensionArterial', label: 'Tensión Arterial' },
+                { key: 'temperatura', label: 'Temperatura' },
+                { key: 'glucemia', label: 'Glucemia' }
+            ];
+
+            return campos.map(campo => `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">${campo.label}</label>
+                    ${campo.tipo === 'select' ? `
+                        <select
+                            value="${datos[campo.key]}"
+                            onchange="actualizarCampo('evaluacionInicial', '${campo.key}', this.value, '${tipo}')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                            <option value="">Seleccionar</option>
+                            ${campo.opciones.map(op => `<option value="${op}">${op}</option>`).join('')}
+                        </select>
+                    ` : `
+                        <input
+                            type="text"
+                            value="${datos[campo.key]}"
+                            onchange="actualizarCampo('evaluacionInicial', '${campo.key}', this.value, '${tipo}')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        />
+                    `}
+                </div>
+            `).join('');
+        }
+
+        function generarCamposAdicionales() {
+            const d = intervencion.evaluacionInicial;
+            const sintomas = [
+                { key: 'palidez', label: 'Palidez' },
+                { key: 'ictericia', label: 'Ictericia' },
+                { key: 'cianosis', label: 'Cianosis' },
+                { key: 'sudoracion', label: 'Sudoración' },
+                { key: 'vomitos', label: 'Vómitos' },
+                { key: 'relajacionEsfinteres', label: 'Relajación Esfínteres' }
+            ];
+
+            return `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Relleno Capilar</label>
+                    <select
+                        value="${d.rellenoCapilar}"
+                        onchange="actualizarCampo('evaluacionInicial', 'rellenoCapilar', this.value)"
+                        class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    >
+                        <option value="">Seleccionar</option>
+                        <option value="<2seg">&lt;2 seg.</option>
+                        <option value=">2seg">&gt;2 seg.</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Pupila Derecha - Reactiva</label>
+                        <select
+                            value="${d.pupilaDerecha.reactiva}"
+                            onchange="actualizarCampo('evaluacionInicial', 'reactiva', this.value === 'true', 'pupilaDerecha')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                            <option value="">Seleccionar</option>
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tamaño</label>
+                        <input
+                            type="text"
+                            value="${d.pupilaDerecha.tamano}"
+                            onchange="actualizarCampo('evaluacionInicial', 'tamano', this.value, 'pupilaDerecha')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Pupila Izquierda - Reactiva</label>
+                        <select
+                            value="${d.pupilaIzquierda.reactiva}"
+                            onchange="actualizarCampo('evaluacionInicial', 'reactiva', this.value === 'true', 'pupilaIzquierda')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                            <option value="">Seleccionar</option>
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tamaño</label>
+                        <input
+                            type="text"
+                            value="${d.pupilaIzquierda.tamano}"
+                            onchange="actualizarCampo('evaluacionInicial', 'tamano', this.value, 'pupilaIzquierda')"
+                            class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                        />
+                    </div>
+                </div>
+
+                <div class="col-span-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        ${sintomas.map(sintoma => `
+                            <label class="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    ${d[sintoma.key] ? 'checked' : ''}
+                                    onchange="actualizarCampo('evaluacionInicial', '${sintoma.key}', this.checked)"
+                                    class="mr-2"
+                                />
+                                ${sintoma.label}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Extensión Quemadura (%)</label>
+                    <input
+                        type="text"
+                        value="${d.extensionQuemadura}"
+                        onchange="actualizarCampo('evaluacionInicial', 'extensionQuemadura', this.value)"
+                        class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Grado Quemadura</label>
+                    <div class="flex space-x-4 mt-2">
+                        ${['I', 'II', 'III'].map(grado => `
+                            <label class="flex items-center">
+                                <input
+                                    type="radio"
+                                    ${d.gradoQuemadura === grado ? 'checked' : ''}
+                                    onchange="actualizarCampo('evaluacionInicial', 'gradoQuemadura', '${grado}')"
+                                    class="mr-2"
+                                />
+                                ${grado}
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Inicializar aplicación
+        cargarDatos();
+        actualizarVista();
+    </script>
+</body>
+</html>
